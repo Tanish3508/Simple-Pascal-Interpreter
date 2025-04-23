@@ -1,6 +1,3 @@
-INT,REAL,PLUS,MINUS,MUL,DIV,LBRAK,RBRAK,EOF='INTEGER','REAL','PLUS','MINUS','MUL','DIV','(',')','EOF'
-BEGIN,END,ASSIGN,ID,SEMI,DOT='BEGIN','END','=','id',';','.'
-PROGRAM,VAR,COLON,COMMA,INT_CONST,REAL_CONST,INT_DIV,REAL_DIV='PROGRAM','VAR','COLON','COMMA','INTEGER_CONST','REAL_CONST','INTEGER_DIV','REAL_DIV'
 from collections import OrderedDict
 
 class NodeVisitor(object):
@@ -15,7 +12,17 @@ class Symbol(object):
     def __init__(self,name,type=None):
         self.name=name
         self.type=type
-    
+
+class ProcedureSymbol(Symbol):      
+    def __init__(self,name,params=None):
+        super(ProcedureSymbol,self).__init__(name)
+        self.params=params if params is not None else [] 
+        self.block_ast=None
+    def __str__(self):
+        return f'<{self.__class__.__name__}(name={self.name}, parameters={self.params})>'
+
+    __repr__=__str__
+
 class BuiltinTypeSymbol(Symbol):
     def __init__(self,name):
         super().__init__(name)
@@ -23,50 +30,70 @@ class BuiltinTypeSymbol(Symbol):
     def __str__(self):
         return self.name
     
-    __repr__=__str__
+    def __repr__(self):
+        return f"<{self.__class__.__name__}(name='{self.name}')>"
     
 class VarSymbol(Symbol):
     def __init__(self,name,type):
         super().__init__(name,type)
     
     def __str__(self):
-        return f'<{self.name}:{self.type}>'
+        return f"<{self.__class__.__name__}(name='{self.name}', type='{self.type}')>"
     
     __repr__=__str__
     
-class SymbolTable(object):
-    def __init__(self):
-        self._symbols=OrderedDict()
+class ScopedSymbolTable(object):
+    def __init__(self,scope_name,scope_level,enclosing_scope=None):
+        self._symbols = OrderedDict()
+        self.scope_name=scope_name
+        self.scope_level=scope_level
+        self.enclosing_scope=enclosing_scope
         self._init_builtins()
-        
     
     def _init_builtins(self):
-        self.define(BuiltinTypeSymbol(INT))
-        self.define(BuiltinTypeSymbol(REAL))
+        self.insert(BuiltinTypeSymbol('INTEGER'))
+        self.insert(BuiltinTypeSymbol('REAL'))
     
     def __str__(self):
-        s=f'Symbols: {[value for value in self._symbols.values()]}'
+        h1='SCOPE (SCOPED SYMBOL TABLE)'
+        lines=['\n',h1, '='*len(h1)]
+        for h_name,h_value in (('Scope name',self.scope_name),('Scope level',self.scope_level),('Enclosing Scope',self.enclosing_scope.scope_name if self.enclosing_scope else None)):
+            lines.append('%-15s: %s' % (h_name,h_value))
+        
+        h2='Scope (Scoped symbol table) contents'
+        lines.extend([h2, '-'*len(h2)])
+        lines.extend(('%7s: %r' % (key,value)) for key,value in self._symbols.items())
+        lines.append('\n')
+        s='\n'.join(lines)
         return s
-    
+
     __repr__=__str__
     
-    def define(self,symbol):
-        print(f'Define: {symbol}')
+    def insert(self,symbol):
+        
         self._symbols[symbol.name]=symbol
-    
-    def lookup(self,name):
-        print(f'Lookup: {name}')
+
+    def lookup(self,name,current_scope_only=False):
+        
         symbol=self._symbols.get(name)
-        return symbol
+        if symbol is not None:
+            return symbol
+        if current_scope_only:
+            return None
+        if self.enclosing_scope is not None:
+            return self.enclosing_scope.lookup(name)
     
 class SymbolTableBuilder(NodeVisitor):
     def __init__(self):
-        self.symtab=SymbolTable()
+        self.symtab=ScopedSymbolTable()
     
     def visit_Block(self,node):
         for declaration in node.declarations:
             self.visit(declaration)
         self.visit(node.compound_statement)
+    
+    def visit_ProcedureDecl(self,node):
+        pass
     
     def visit_Program(self,node):
         self.visit(node.block)

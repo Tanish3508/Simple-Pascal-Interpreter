@@ -1,11 +1,13 @@
-from Utils.Symboltable_pascal import SymbolTableBuilder
 from Utils.Interpreter_pascal import Interpreter
+from Utils.Semantic_Analyzer_pascal import SemanticAnalyzer
 from Utils.Parser_pascal import Parser
-from Utils.lexer_pascal import Lexer
+from Utils.lexer_pascal import Lexer,SemanticError,ParserError,LexerError
 print('All imported\n')
 
+import sys
+
 def main():
-    text="""\
+   text="""\
      PROGRAM Part10;
 VAR
    number     : INTEGER;
@@ -30,14 +32,21 @@ BEGIN {Part10}
 END.  {Part10}
      """
         
-    lexer=Lexer(text)
-    parser=Parser(lexer)
-    interpreter=Interpreter(parser)
-    symtab_builder=SymbolTableBuilder()
-    tree=parser.parse()
-    interpreter.visit(tree)
-    symtab_builder.visit(tree)
-    print(symtab_builder.symtab)
-    print(interpreter.GLOBAL_SCOPE)
+   lexer = Lexer(text)
+   try:
+      parser = Parser(lexer)
+      tree = parser.parse()
+   except (ParserError,LexerError) as e:
+      print(e.message)
+      sys.exit(1)
+   semantic_analyzer = SemanticAnalyzer()
+   try:
+      semantic_analyzer.visit(tree)
+   except SemanticError as e:
+      print(e.message)
+      sys.exit(1)
+   interpreter=Interpreter(tree)
+   interpreter.interpret()
+   
 if __name__=='__main__':
     main()
